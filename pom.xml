@@ -8,6 +8,13 @@
     <artifactId>mob</artifactId>
     <version>1.0-SNAPSHOT</version>
 
+    <!--<repositories>-->
+        <!--<repository>-->
+            <!--<id>aliyun</id>-->
+            <!--<url>http://maven.aliyun.com/nexus/content/groups/public/</url>-->
+        <!--</repository>-->
+    <!--</repositories>-->
+
     <build>
         <plugins>
             <plugin>
@@ -17,6 +24,10 @@
                 <configuration>
                     <source>1.7</source>
                     <target>1.7</target>
+                    <compilerArguments>
+                        <extdirs>mob\lib</extdirs>
+                    </compilerArguments>
+
                 </configuration>
             </plugin>
             <plugin>
@@ -70,7 +81,7 @@
     </build>
 
     <dependencies>
-        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core_2.11 -->
+
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_2.11</artifactId>
@@ -129,6 +140,16 @@
             <artifactId>mysql-connector-java</artifactId>
             <version>5.1.42</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.noraui</groupId>
+            <artifactId>ojdbc7</artifactId>
+            <version>12.1.0.2</version>
+        </dependency>
+
+
+
+
+
 
     </dependencies>
 

@@ -6,7 +6,7 @@ import java.lang.Double
 
 import com.wanda.mob.spark.streaming.event.impl.CommonEvent
 import com.wanda.mob.spark.streaming.main.Streaming.sc
-import com.wanda.mob.spark.streaming.main.Offline.sc
+import com.wanda.mob.spark.streaming.main.New_Offline.sc
 import org.apache.spark.rdd.RDD
 
 
@@ -33,7 +33,7 @@ object Model_Three {
           .maxBy(t=>SDF.parse(t.LST_UPD_TIME)).LST_UPD_TIME)
       }
       //OK****************************************************************************************
-      //计算delq_paytm_diff_30
+      //计算delq_paytm_diff_30（计算30天内逾期日期与相邻逾期日期之间的最小间隔）
       val list= t._2.filter(t=>
         (today.getTime-SDF.parse(t.PAYMENT_DTE).getTime)/(1000*60*60*24)<=30
           &&t.DELQ_STATUS.contains("1"))
@@ -47,7 +47,7 @@ object Model_Three {
       if(list.nonEmpty&&(list.size+last_30.size)>1){
         var listdiff30:List[Long]=List()
         if(last_30.nonEmpty) {
-          val firstelement30 = (SDF.parse(list.head.PAYMENT_DTE).getTime - SDF.parse(last_30.maxBy(t=>SDF.parse(t.PAYMENT_DTE)).PAYMENT_DTE).getTime) / (1000 * 60 * 60 * 24)
+         val firstelement30 = (SDF.parse(list.head.PAYMENT_DTE).getTime - SDF.parse(last_30.maxBy(t=>SDF.parse(t.PAYMENT_DTE)).PAYMENT_DTE).getTime) / (1000 * 60 * 60 * 24)
           listdiff30=math.abs(firstelement30)::listdiff30
         }
 
@@ -109,16 +109,16 @@ object Model_Three {
       }
       //****************************************************************************************
       //计算timeStamp
-      par.timeStamp=t._2.maxBy(t=> new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(t.LST_UPD_TIME)).LST_UPD_TIME
+      par.timeStamp=t._2.maxBy(t=>SDF.parse(t.LST_UPD_TIME)).LST_UPD_TIME
       //返回每个用户对应的指标value
       (t._1, par)}
-    )).cache()
+    ))
 
     val scoreRdd=customParRdd.mapPartitions(itertor=>itertor.map(t=>{
-            println(t._1+"-------oday_max1:  "+t._2.oday_max1)
-            println(t._1+"-------max_oday_max3:  "+t._2.max_oday_max3)
-            println(t._1+"-------delq_paytm_diff_30:  "+t._2.delq_paytm_diff_30)
-            println(t._1+"-------delq_paytm_diff_90:  "+t._2.delq_paytm_diff_90)
+//      println(t._1+"-------oday_max1:  "+t._2.oday_max1)
+//      println(t._1+"-------max_oday_max3:  "+t._2.max_oday_max3)
+//      println(t._1+"-------delq_paytm_diff_30:  "+t._2.delq_paytm_diff_30)
+//      println(t._1+"-------delq_paytm_diff_90:  "+t._2.delq_paytm_diff_90)
       //****************************************************************************************
       //计算delq_paytm_diff_30minbox的分数
       if(t._2.delq_paytm_diff_30<0){
@@ -173,15 +173,15 @@ object Model_Three {
       val totalScore1:Double=t._2.oday_max1+t._2.max_oday_max3
       val totalScore2=t._2.delq_paytm_diff_30+t._2.delq_paytm_diff_90
       val totalScore=totalScore1+totalScore2
-            println(t._2.oday_max1+t._2.max_oday_max3+t._2.delq_paytm_diff_30+"-------------------------")
+//      println(t._2.oday_max1+t._2.max_oday_max3+t._2.delq_paytm_diff_30+"-------------------------")
 
-            println(t._1+"******oday_max1:  "+t._2.oday_max1)
-            println(t._1+"******max_oday_max3:  "+t._2.max_oday_max3)
-            println(t._1+"******delq_paytm_diff_30:  "+t._2.delq_paytm_diff_30)
-            println(t._1+"******delq_paytm_diff_90:  "+t._2.delq_paytm_diff_90)
-            //println("value:"+t._2.latest_oday_max)
-            println("sum"+totalScore)
-            //计算B_score
+//      println(t._1+"******oday_max1:  "+t._2.oday_max1)
+//      println(t._1+"******max_oday_max3:  "+t._2.max_oday_max3)
+//      println(t._1+"******delq_paytm_diff_30:  "+t._2.delq_paytm_diff_30)
+//      println(t._1+"******delq_paytm_diff_90:  "+t._2.delq_paytm_diff_90)
+      //println("value:"+t._2.latest_oday_max)
+//      println("sum"+totalScore)
+//      //计算B_score
       val B_score=500+50/Math.log(2)*(-(totalScore+Intercept))
       (t._1, Double.valueOf(B_score.formatted("%.5f")),t._2.timeStamp)
     }))

@@ -28,7 +28,6 @@ object MyKafkaUtils {
     * @param topic
     * @return
     */
-
   def createKafkaStream(ssc: StreamingContext, kafkaParams: Map[String, String], client: ZkClient, group: String, topic: String,
                         brokerList: String): InputDStream[(String, String)] = {
 
@@ -40,6 +39,7 @@ object MyKafkaUtils {
     topic.split(",").foreach(topic=> list.add(topic))
 
     if (!flag) { // false : zookeeper中人工维护了offsets
+      import scala.collection.JavaConversions._
 //      val earliestOffsets = MyKafkaOffsetUtils.getInstance().getEarliestOffset(brokerList, list, group)
 //      val lastOffsets = MyKafkaOffsetUtils.getInstance().getLastOffset(brokerList, list, group)
 
@@ -47,7 +47,7 @@ object MyKafkaUtils {
       storedOffsets.foreach(item => {
         val topicAndPartition = item._1
         val offset = item._2
-//        println("里面的是"+topicAndPartition,offset)
+        //        println("里面的是"+topicAndPartition,offset)
 //        if (offset < earliestOffsets(topicAndPartition) || offset > lastOffsets(topicAndPartition))
           flag = true
       })
@@ -133,7 +133,7 @@ object MyKafkaUtils {
       val topicDirs = new ZKGroupTopicDirs(group, offset.topic)
       val path = s"${topicDirs.consumerOffsetDir}/${offset.partition}"
       ZkUtils.updatePersistentPath(client, path, offset.untilOffset.toString)
-//      println(s"@@@@@@ topic  ${offset.topic}  partition ${offset.partition}  fromoffset ${offset.fromOffset}  untiloffset ${offset.untilOffset} #######")
+      //      println(s"@@@@@@ topic  ${offset.topic}  partition ${offset.partition}  fromoffset ${offset.fromOffset}  untiloffset ${offset.untilOffset} #######")
     }
   }
 

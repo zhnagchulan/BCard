@@ -8,7 +8,7 @@ import com.wanda.mob.spark.streaming.event.impl.CommonEvent
 import com.wanda.mob.spark.streaming.utils.CustomClassing
 import org.apache.spark.rdd.RDD
 import com.wanda.mob.spark.streaming.main.Streaming.sc
-import com.wanda.mob.spark.streaming.main.Offline.sc
+import com.wanda.mob.spark.streaming.main.New_Offline.sc
 
 
 class Model_Four (){
@@ -31,6 +31,7 @@ object Model_Four{
     //****************************************************************************************
     val customParRdd=customData.mapPartitions(itertor => itertor.map(t => {
       val par = new Model_Four()
+
       //OK****************************************************************************************
       //计算delq_paytm_diff_30
       val list= t._2.filter(t=>
@@ -74,8 +75,10 @@ object Model_Four{
       par.min_yqh_day=Double.valueOf(tempmin)
 
 
+
       //OK****************************************************************************************
       //计算shidong_rate0
+      //思路：累加每笔交易实动率
       par.shidong_rate0=t._2
         .map(t => ((t.ACCOUNT_NMBR, t.PRINCIPAL, t.CASH_AMT), Double.valueOf(t.TRAN_AMT_PAID))).groupBy(t=>t._1)
         .map(t=>(t._1._1,(Double.valueOf(t._1._2)-t._2.toList.
@@ -88,7 +91,6 @@ object Model_Four{
         &&(today.getTime - SDF.parse(t.PAYMENT_DTE).getTime) / (1000 * 60 * 60 * 24) >=0&& t.DELQ_STATUS.contains("1") && Double.valueOf(t.TRAN_AMT_PAID)>0).toList.size)
       val tmp2=  Double.valueOf(t._2.filter(t => (today.getTime - SDF.parse(t.PAYMENT_DTE).getTime) / (1000 * 60 * 60 * 24) <90
         &&(today.getTime - SDF.parse(t.PAYMENT_DTE).getTime) / (1000 * 60 * 60 * 24) >=0 &&Double.valueOf(t.TRAN_AMT_PAID)>0).toList.size)
-
       if(tmp1==0 || tmp2==0){
         par.yqhk_cnt_ratio_90=0.0
       }else {
@@ -98,23 +100,23 @@ object Model_Four{
       //计算latest_oday_max（最近一笔交易时间以后的记录中最大逾期天数）
       val recentDate=SDF.parse(t._2.maxBy(t=>SDF.parse(t.POSTING_DTE)).POSTING_DTE)
       val temp_max=t._2.filter(t=> t.DELQ_STATUS.contains("1") &&
-        SDF.parse(t.PAYMENT_DTE).getTime-recentDate.getTime>0
+        SDF.parse(t.PAYMENT_DTE).getTime-recentDate.getTime>=0
         && SDF.parse(t.PAYMENT_DTE).getTime-today.getTime<=0
       ).map(t=>SDF.parse(t.LST_UPD_TIME).getTime-SDF.parse(t.PAYMENT_DTE).getTime)
 
       if(temp_max.isEmpty){par.latest_oday_max=0.0}else{
         par.latest_oday_max=(temp_max.max/(1000*60*60*24)).toDouble} //****************************************************************************************
       //计算timeStamp
-      par.timeStamp=t._2.maxBy(t=>new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(t.LST_UPD_TIME)).LST_UPD_TIME
+      par.timeStamp=t._2.maxBy(t=>SDF.parse(t.LST_UPD_TIME)).LST_UPD_TIME
       (t._1, par)}
-    )).cache()
+    ))
 
     val scoreRdd=customParRdd.mapPartitions(itertor=>itertor.map(t=>{
-      println(t._1+"------t._2.yqhk_cnt_ratio_90:"+t._2.yqhk_cnt_ratio_90)
-      println(t._1+"------t._2.shidong_rate0:"+t._2.shidong_rate0)
-      println(t._1+"------t._2.delq_paytm_diff_30:"+t._2.delq_paytm_diff_30)
-      println(t._1+"------t._2.min_yqh_day:"+t._2.min_yqh_day)
-      println(t._1+"------t._2.latest_oday_max:"+t._2.latest_oday_max)
+//      println(t._1+"------t._2.yqhk_cnt_ratio_90:"+t._2.yqhk_cnt_ratio_90)
+//      println(t._1+"------t._2.shidong_rate0:"+t._2.shidong_rate0)
+//      println(t._1+"------t._2.delq_paytm_diff_30:"+t._2.delq_paytm_diff_30)
+//      println(t._1+"------t._2.min_yqh_day:"+t._2.min_yqh_day)
+//      println(t._1+"------t._2.latest_oday_max:"+t._2.latest_oday_max)
       //****************************************************************************************
       //计算delq_paytm_diff_30minbox的分数
       if(t._2.delq_paytm_diff_30<0){
@@ -173,7 +175,7 @@ object Model_Four{
         t._2.yqhk_cnt_ratio_90= -0.105595553
       }else if(t._2.yqhk_cnt_ratio_90<=0.6) {
         t._2.yqhk_cnt_ratio_90= 0.175004632
-      }else if(t._2.shidong_rate0<=0.8) {
+      }else if(t._2.yqhk_cnt_ratio_90<=0.8) {
         t._2.yqhk_cnt_ratio_90= 0.27687999
       }else{
         t._2.yqhk_cnt_ratio_90=0.441641459
@@ -185,12 +187,12 @@ object Model_Four{
       val totalScore2=t._2.delq_paytm_diff_30+t._2.min_yqh_day
       val totalScore3=t._2.latest_oday_max+totalScore1
       val totalScore=totalScore3+totalScore2
-      println("yqhk_cnt_ratio_90:"+t._2.yqhk_cnt_ratio_90)
-      println("t._2.shidong_rate0:"+t._2.shidong_rate0)
-      println("t._2.delq_paytm_diff_30:"+t._2.delq_paytm_diff_30)
-      println("t._2.min_yqh_day:"+t._2.min_yqh_day)
-      println("t._2.latest_oday_max:"+t._2.latest_oday_max)
-      println("totalScore"+totalScore)
+//      println("yqhk_cnt_ratio_90:"+t._2.yqhk_cnt_ratio_90)
+//      println("t._2.shidong_rate0:"+t._2.shidong_rate0)
+//      println("t._2.delq_paytm_diff_30:"+t._2.delq_paytm_diff_30)
+//      println("t._2.min_yqh_day:"+t._2.min_yqh_day)
+//      println("t._2.latest_oday_max:"+t._2.latest_oday_max)
+//      println("totalScore"+totalScore)
       //计算B_score
       val B_score=500+50/Math.log(2)*(-(totalScore+Intercept))
 

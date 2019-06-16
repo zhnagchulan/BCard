@@ -1,13 +1,13 @@
 package com.wanda.mob.spark.streaming.models
 
 import java.text.SimpleDateFormat
-import java.util.Date
+import java.util.{Date, LinkedList}
 import java.lang.Double
-import java.util
 
 import com.wanda.mob.spark.streaming.event.impl.CommonEvent
 import org.apache.spark.rdd.RDD
-import java.util.LinkedList
+import java.util.Calendar
+
 
 class Model_Two() {
   var fst_trade_shidong: Double = _
@@ -29,7 +29,7 @@ object Model_Two {
     val dateFormatByDay = new SimpleDateFormat("yyyy-MM-dd")
     //val today = SDF.parse(SDF.format(new Date()))
 
-
+  //  customData.cache()
     //****************************************************************************************
     val customParRdd = customData.mapPartitions(itertor => itertor.map(t => {
       val par = new Model_Two()
@@ -37,9 +37,11 @@ object Model_Two {
       if(difFlag.endsWith("客群2")){
         todayToday=dateFormatByDay.parse(t._2.filter(t=>Double.valueOf(t.TRAN_AMT_PAID)>0.0)
           .maxBy(t=>SDF.parse(t.LST_UPD_TIME)).LST_UPD_TIME)
+
       }
       //****************************************************************************************
       //计算fst_trade_shidong
+      //思路：fst_trade_shidong=第一笔交易的PRINCIPAL/CASH_AMT
       val min = t._2.minBy(t => SDF.parse(t.POSTING_DTE))
 
       if (min == null) {
@@ -53,60 +55,59 @@ object Model_Two {
       val less180 = t._2.groupBy(t => t.ACCOUNT_NMBR).map(t => (t._1, t._2.minBy(t => t.PAYMENT_DTE)))
         .map(t => (t, Double.valueOf(todayToday.getTime - SDF.parse(t._2.POSTING_DTE).getTime) / (1000 * 60 * 60 * 24)))
         .filter(t => t._2 <= 180)
+
       val isZero = less180.map(t => Double.valueOf(t._1._2.PRINCIPAL)).toList.aggregate(0.0)({ (sum, ch) => sum + ch.toDouble }, { (p1, p2) => p1 + p2 })
       if (isZero != 0) {
-        par.post_23_06_prata6 = (less180.filter(t => SDF.parse(t._1._2.POSTING_DTE).getHours >= 23 && SDF.parse(t._1._2.POSTING_DTE).getHours <= 6)
-          .map(t => Double.valueOf(t._1._2.PRINCIPAL)).toList.aggregate(0.0)({ (sum, ch) => sum + ch.toDouble }, { (p1, p2) => p1 + p2 }) / isZero)
-        //println("分子"+less180.filter(t => SDF.parse(t._1._2.POSTING_DTE).getHours >= 23 && SDF.parse(t._1._2.POSTING_DTE).getHours <= 6)
-          //.map(t => Double.valueOf(t._1._2.PRINCIPAL)).toList.aggregate(0.0)({ (sum, ch) => sum + ch.toDouble }, { //(p1, p2) => p1 + p2 }))
-        //println("分母"+isZero)
+       val fenzi= less180.filter(t => SDF.parse(t._1._2.POSTING_DTE).getHours>=23 || SDF.parse(t._1._2.POSTING_DTE).getHours <= 6).map(t => Double.valueOf(t._1._2.PRINCIPAL)).toList.aggregate(0.0)({ (sum, ch) => sum + ch.toDouble }, { (p1, p2) => p1 + p2 })
+        par.post_23_06_prata6 = (fenzi / isZero)
       } else {
         par.post_23_06_prata6 = -1.0
       }
       //OK****************************************************************************************
       //计算post_cnt1
+      //思路：统计30天内的ACCOUNT_NMBR
       par.post_cnt1 = t._2.filter(t => (todayToday.getTime - SDF.parse(t.POSTING_DTE).getTime) / (1000 * 60 * 60 * 24) <= 30)
         .map(t => t.ACCOUNT_NMBR).toSet.size.toDouble
 
       //OK****************************************************************************************
       //计算loan_pain_tot
-      //借款日期的集合与还款日期的集合的交集的集合即为又借款又还款的日期集合
+      //思路：借款日期的集合与还款日期的集合的交集的集合即为又借款又还款的日期集合
+      //从借款日期集合中拿出交集中的日期（避免去重借款日期）对这些日期进行count
       val days = (todayToday.getTime - dateFormatByDay.parse(min.POSTING_DTE).getTime) / (1000 * 60 * 60 * 24)
       if (days != 0) {
-        var hk_DateRDD = t._2.map(t => dateFormatByDay.parse(t.LST_UPD_TIME)).filter(t=>(t.getTime-todayToday.getTime)/(1000 * 60 * 60 * 24)<=0)
-        var jk_Date_RDD = t._2.map(t => dateFormatByDay.parse(t.POSTING_DTE)).filter(t=>(t.getTime-todayToday.getTime)/(1000 * 60 * 60 * 24)<=0)
-        //var jk_Date_RDD_reverse=jk_Date_RDD
-        var tt:LinkedList[Date]=new util.LinkedList[Date]()
-
-         jk_Date_RDD.foreach(t=>tt.add(t))
-        //var tt:List[Date]=List()
-        for(k<-hk_DateRDD.toSet.intersect(jk_Date_RDD.toSet)){
-         tt.add(k)
-        }
-
-       // tt.foreach(println)
-        val count=jk_Date_RDD.size-tt.size
+        val hk_Date= t._2.filter(t=>Double.valueOf(t.TRAN_AMT_PAID)>0&&dateFormatByDay.parse(t.LST_UPD_TIME).getTime<=todayToday.getTime).map(t=>dateFormatByDay.parse(t.LST_UPD_TIME).toString).toSet
+        val jk_Date = t._2.filter(t=>Double.valueOf(t.PRINCIPAL)>0&&dateFormatByDay.parse(t.POSTING_DTE).getTime<=todayToday.getTime).map(t=>(t.ACCOUNT_NMBR,dateFormatByDay.parse(t.POSTING_DTE).toString)).toSet
+        var count = 0
+        for (k <- (hk_Date).intersect(jk_Date.map(t=>t._2))) {
+          jk_Date.foreach(t=>{
+            if(t._2.equals(k)){count=count+1}
+          })}
         par.loan_pain_tot = Double.valueOf(count) / Double.valueOf(days)
-        println(t._1+"分子："+count)
-        println(t._1+"分母"+days)
-        //println(t._1+"还款日期集合："+(t._2.map(t => dateFormatByDay.parse(t.LST_UPD_TIME)).distinct().toJavaRDD().c.collect()))
-        // println(t._1+"借款日期集合："+t._2.map(t => dateFormatByDay.parse(t.POSTING_DTE)).toJavaRDD().distinct().collect())
-         //jk_DateRDD.toSet.intersect(jk_Date_RDD.toSet).foreach(println)
-         //jk_Date_RDD.toSet.foreach(println)
+//        println(t._1+"分子："+count)
+//        println(t._1+"分母："+days)
+//         println(t._1+"jk："+
+//         jk_Date.map(t=>t._2).mkString(","))
+//        println(t._1+"hk："+
+//          hk_Date.mkString(","))
+
       } else {
         par.loan_pain_tot = -1.0
       }
       //OK****************************************************************************************
-      //思路：累加每笔交易的shiDongRate求全局shiDongRate再除以90天
       //计算shidong_avg_3mon
+      /*思路借款和：（1）求出90天内的借款和
+      *        (2)求出90天内还款和
+      *        （3）累加90天（（借款和-还款和）/ CASH_AMT）
+      */
+
       var shiDongRateSumFor90: Double = 0.0
       //90天内Posttingdate集合
-      // println(t._1+"是否有数据："+t._2.size)
+     // println(t._1+"是否有数据："+t._2.size)
       val postDTESet_90 = t._2.filter(t => (todayToday.getTime - dateFormatByDay.parse(t.POSTING_DTE).getTime)/(24 * 60 * 60 * 1000)<= 90 ).map(t => dateFormatByDay.parse(t.POSTING_DTE)).toSet
-      //println(t._1+"jiekjihe"+postDTESet_90.size)
+     //println(t._1+"jiekjihe"+postDTESet_90.size)
       //90天内last_update_time集合
       val lastUpdateDTESet_90 = t._2.filter(t => (todayToday.getTime - dateFormatByDay.parse(t.LST_UPD_TIME).getTime )/( 24 * 60 * 60 * 1000)<= 90 ).map(t => dateFormatByDay.parse(t.LST_UPD_TIME)).toSet
-      //println(t._1+"huankjihe"+lastUpdateDTESet_90.size)
+    //println(t._1+"huankjihe"+lastUpdateDTESet_90.size)
       //Posttingdate集合Unionlast_update_time集合求最小Date是否有数据
       val minDate_90 = lastUpdateDTESet_90.union(postDTESet_90)
       var endDate_90 = 89
@@ -115,16 +116,22 @@ object Model_Two {
         endDate_90 = ((todayToday.getTime - minDate_90.min.getTime) / (1000 * 60 * 60 * 24)).toInt
       }
       for (i <- 0 to endDate_90) {
-        val temp= t._2.filter(t => (todayToday.getTime - 24 * 60 * 60 * 1000 * i - dateFormatByDay.parse(t.LST_UPD_TIME).getTime)
-          / (1000 * 60 * 60 * 24) >= 0)
-          .map(t => ((t.ACCOUNT_NMBR, t.PRINCIPAL, t.CASH_AMT), Double.valueOf(t.TRAN_AMT_PAID))).groupBy(t => t._1)
-          .map(t => (t._1._1, (Double.valueOf(t._1._2) - t._2.toList.
-            map(t => t._2).aggregate(0.0)({ (sum, ch) => sum + ch.toDouble },
-            { (p1, p2) => p1 + p2 })) / Double.valueOf(t._1._3))).values
-          .toList.aggregate(0.0)({ (sum, ch) => sum + ch }, { (p1, p2) => p1 + p2 })
-        shiDongRateSumFor90= shiDongRateSumFor90 +temp
+        //筛选出指定时间范围之内的还款记录
+        val temp_LastUpDate_90 =  t._2.filter(t => ((todayToday.getTime - dateFormatByDay.parse(t.LST_UPD_TIME).getTime) / (1000 * 60 * 60 * 24))-i >= 0&&Double.valueOf(t.TRAN_AMT_PAID)>0).map(t=>Double.valueOf(t.TRAN_AMT_PAID))
+        //筛选出指定时间范围之内的借款记录
+        val temp_PostDate_90 =  t._2.filter(t => ((todayToday.getTime  - dateFormatByDay.parse(t.POSTING_DTE).getTime) / (1000 * 60 * 60 * 24))-i >= 0).map(t=>(t.ACCOUNT_NMBR,t.PRINCIPAL)).toSet[(String,String)].toList.map(t=>Double.valueOf(t._2))
+        //求借款总和
+        var pri_sum_90=0.0
+        temp_PostDate_90.foreach(t=>pri_sum_90=pri_sum_90+t)
+        //求还款总和
+        var pai_sum_90=0.0
+        temp_LastUpDate_90.foreach(t=>pai_sum_90=pai_sum_90+t)
+        //求一天的shidongRate
+        var shi_90=(pri_sum_90-pai_sum_90)/Double.valueOf(t._2.toList.head.CASH_AMT)
+        //累加每天的shidongRate
+        shiDongRateSumFor90= shiDongRateSumFor90+ shi_90
       }
-
+      //求90天内的平均shidongRate
       par.shidong_avg_3mon = shiDongRateSumFor90 / 90
       //OK****************************************************************************************
       //  计算shidong_avg_apr
@@ -141,20 +148,31 @@ object Model_Two {
       val minDate_30 = lastUpdateDTESet_30.union(postDTESet_30)
       var endDate_30 = 29
       if (minDate_30 .nonEmpty) {
+       // println("停止时间："+SDF.format(minDate_30.min))
         endDate_30 = ((todayToday.getTime - minDate_30.min.getTime) / (1000 * 60 * 60 * 24)).toInt
       }
 
       for (j <- 0 to endDate_30) {
-        val temp =  t._2.filter(t => (todayToday.getTime - 24 * 60 * 60 * 1000 * j - dateFormatByDay.parse(t.LST_UPD_TIME).getTime) / (1000 * 60 * 60 * 24) >= 0)
-          .map(t => ((t.ACCOUNT_NMBR, t.PRINCIPAL, t.CASH_AMT), Double.valueOf(t.TRAN_AMT_PAID))).groupBy(t => t._1)
-          .map(t => (t._1._1, (Double.valueOf(t._1._2) - t._2.toList.
-            map(t => t._2).aggregate(0.0)({ (sum, ch) => sum + ch.toDouble },
-            { (p1, p2) => p1 + p2 })) / Double.valueOf(t._1._3))).values
-          .toList.aggregate(0.0)({ (sum, ch) => sum + ch }, { (p1, p2) => p1 + p2 })
-        shiDongRateSumFor30= shiDongRateSumFor30+temp
+        //筛选出指定时间范围之内的还款记录
+        val temp_LastUpDate =  t._2.filter(t => ((todayToday.getTime  - dateFormatByDay.parse(t.LST_UPD_TIME).getTime) / (1000 * 60 * 60 * 24))-j >= 0&&Double.valueOf(t.TRAN_AMT_PAID)>0).map(t=>Double.valueOf(t.TRAN_AMT_PAID))
+        //筛选出指定时间范围之内的借款记录
+        val temp_PostDate =  t._2.filter(t => ((todayToday.getTime   - dateFormatByDay.parse(t.POSTING_DTE).getTime) / (1000 * 60 * 60 * 24))-j >= 0).map(t=>(t.ACCOUNT_NMBR,t.PRINCIPAL)).toSet[(String,String)].toList.map(t=>Double.valueOf(t._2))
+        //求借款总和
+        var pri_sum=0.0
+        temp_PostDate.foreach(t=>pri_sum=pri_sum+t)
+        //求还款总和
+        var pai_sum=0.0
+        temp_LastUpDate.foreach(t=>pai_sum=pai_sum+t)
+        //求一天的shidongRate
+        val shi=(pri_sum-pai_sum)/Double.valueOf(t._2.toList.head.CASH_AMT)
+        //累加每天的shidongRate
+        shiDongRateSumFor30= shiDongRateSumFor30+ shi
+       //println(t._1+"当前向前第"+j+"天-----实动rate: "+shi+"----totalPri"+pri_sum+"-----totalPai"+pai_sum)
 
       }
+      //求30天内的平均shidongRate
       par.shidong_avg_apr = shiDongRateSumFor30 / 30
+
 
 
       //****************************************************************************************
@@ -165,12 +183,12 @@ object Model_Two {
     ))
 
     val scoreRdd = customParRdd.mapPartitions(itertor => itertor.map(t => {
-      println(t._1+"-----------t._2.loan_pain_tot:  "+t._2.loan_pain_tot)
-      println(t._1+"-----------t._2.post_23_06_prata6:  "+t._2.post_23_06_prata6)
-      println(t._1+"-----------t._2.shidong_avg_apr  "+t._2.shidong_avg_apr)
-      println(t._1+"-----------t._2.fst_trade_shidong:  "+t._2.fst_trade_shidong)
-      println(t._1+"-----------t._2.post_cnt1 "+t._2.post_cnt1)
-      println(t._1+"-----------t._2.shidong_avg_3mon:  "+t._2.shidong_avg_3mon)
+//            println(t._1+"-----------t._2.loan_pain_tot:  "+t._2.loan_pain_tot)
+//            println(t._1+"-----------t._2.post_23_06_prata6:  "+t._2.post_23_06_prata6)
+//            println(t._1+"-----------t._2.shidong_avg_apr  "+t._2.shidong_avg_apr)
+//            println(t._1+"-----------t._2.fst_trade_shidong:  "+t._2.fst_trade_shidong)
+//            println(t._1+"-----------t._2.post_cnt1 "+t._2.post_cnt1)
+//            println(t._1+"-----------t._2.shidong_avg_3mon:  "+t._2.shidong_avg_3mon)
       //****************************************************************************************
       //计算fst_trade_shidongbox的分数
       if (t._2.fst_trade_shidong <= 0.24 && t._2.fst_trade_shidong >= -1) {
@@ -249,14 +267,14 @@ object Model_Two {
       val totalScore4 = totalScore1 + totalScore2
       val totalScore = totalScore4 + totalScore3
 
-      println(t._1+"******t._2.loan_pain_tot:  "+t._2.loan_pain_tot)
-      println(t._1+"******t._2.post_23_06_prata6:  "+t._2.post_23_06_prata6)
-      println(t._1+"******t._2.shidong_avg_apr  "+t._2.shidong_avg_apr)
-      println(t._1+"******t._2.fst_trade_shidong:  "+t._2.fst_trade_shidong)
-      println(t._1+"******t._2.post_cnt1 "+t._2.post_cnt1)
-      println(t._1+"******t._2.shidong_avg_3mon:  "+t._2.shidong_avg_3mon)
-      //println("value:"+t._2.latest_oday_max)
-      println("sum"+totalScore)
+//            println(t._1+"******t._2.loan_pain_tot:  "+t._2.loan_pain_tot)
+//            println(t._1+"******t._2.post_23_06_prata6:  "+t._2.post_23_06_prata6)
+//            println(t._1+"******t._2.shidong_avg_apr  "+t._2.shidong_avg_apr)
+//            println(t._1+"******t._2.fst_trade_shidong:  "+t._2.fst_trade_shidong)
+//            println(t._1+"******t._2.post_cnt1 "+t._2.post_cnt1)
+//            println(t._1+"******t._2.shidong_avg_3mon:  "+t._2.shidong_avg_3mon)
+//            println("value:"+t._2.latest_oday_max)
+//            println("sum"+totalScore)
       //计算B_score
       val B_score = 500 + 50 / Math.log(2) * (-(totalScore + Intercept))
 

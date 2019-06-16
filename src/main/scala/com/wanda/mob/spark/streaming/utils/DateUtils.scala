@@ -186,18 +186,19 @@ object DateUtils {
 
   }
 
-  def getTwoDaysAgo(date:String):String={
+  def backdating(date:String,days: Int):String={
 
     val DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd")
 
-    DATE_FORMAT.format(DATE_FORMAT.parse(date).getTime - (1000 * 60 * 60 * 24 * 2))
+    DATE_FORMAT.format(DATE_FORMAT.parse(date).getTime - (1000 * 60 * 60 * 24 * days))
   }
 
-  def isFirstDayOfMonth(date:String):Boolean = date.split("-")(2) == "01"
 
   def extractMonth(date:String):String={
     val DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd")
     val MONTH_FORMAT = new SimpleDateFormat("yyyy-MM")
     MONTH_FORMAT.format(DATE_FORMAT.parse(date).getTime)
   }
+
+  def isFirstDayOfMonth(date:String):Boolean = date.split("-")(2) == "01"
 }

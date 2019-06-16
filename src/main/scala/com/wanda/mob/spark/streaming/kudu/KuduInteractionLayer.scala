@@ -22,6 +22,24 @@ class KuduInteractionLayer {
       .kudu
       .createOrReplaceTempView(tmpTable)
   }
+  def doExtractBySQL(sqlFuc: (String, String, String) => String,
+                     kuduOptionsA: Map[String, String],
+                     kuduOptionsB: Map[String, String],
+                     kuduOptionsC: Map[String, String],
+                     session: SparkSession): DataFrame = {
+
+    val table_a = "tmp_a"
+    val table_b = "tmp_b"
+    val table_c = "tmp_c"
+
+    registerSession(session, kuduOptionsA, table_a)
+    registerSession(session, kuduOptionsB, table_b)
+    registerSession(session, kuduOptionsC, table_c)
+
+    val sqlStr = sqlFuc(table_a, table_b, table_c)
+
+    session.sql(sqlStr)
+  }
 
   def doExtractBySQL(sqlFuc: (String, String, String, String) => String,
                      kuduOptionsA: Map[String, String],

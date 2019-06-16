@@ -7,12 +7,12 @@ object test {
     def main(args: Array[String]): Unit = {
          //测试获得逾期的客户
       // println("base:"+CustomClassing.baseRdd.map(t=>t._1).distinct().count())
-      //         println("逾期用户："+CustomClassing.getYqCustomRdd().toJavaRDD().collect())
-      //         //测试非逾期客户
-      //          println("非逾期用户："+CustomClassing.getNoYqCustomRdd().toJavaRDD().collect())
-      //         //测试当前无余额用户
-      //         println("当前非逾期无余额用户："+CustomClassing.getNoBankBlanceCustomRdd().toJavaRDD().collect())
-      //         //测试当前有余额用户
+//         println("逾期用户："+CustomClassing.getYqCustomRdd().toJavaRDD().collect())
+//         //测试非逾期客户
+//          println("非逾期用户："+CustomClassing.getNoYqCustomRdd().toJavaRDD().collect())
+//         //测试当前无余额用户
+//         println("当前非逾期无余额用户："+CustomClassing.getNoBankBlanceCustomRdd().toJavaRDD().collect())
+//         //测试当前有余额用户
 //          println("当前非逾期有余额用户："+CustomClassing.getBankBlanceCustomRdd().toJavaRDD().collect())
 //          //当前逾期有余额历史无逾期用户
 //          println("当前非逾期有余额历史无逾期用户："+CustomClassing.getHistoryNoYqCustomRDD().toJavaRDD().collect())
